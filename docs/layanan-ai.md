@@ -85,9 +85,14 @@ di API Higgsfield (hanya di aplikasi webnya). Satu entri:
 
 ## Whisper lokal (`src/main/whisper.ts`)
 
-- Biner: `resources/whisper/whisper-cli.exe` + DLL (whisper.cpp, lisensi MIT). Saat ini hanya untuk Windows.
+- Biner whisper.cpp per platform:
+  - Windows: `resources/whisper/whisper-cli.exe` + DLL (disertakan manual sebelum build rilis);
+  - macOS/Linux: `resources/whisper/whisper-cli` kalau ada, kalau tidak aplikasi mencari `whisper-cli` di PATH
+    (cara termudah di Mac: `brew install whisper.cpp`).
+- Kalau biner tidak ditemukan, `whisperStatus()` melaporkan `binaryMissing: true`: Pengaturan menampilkan panduan
+  pemasangan dan tombol unduh model dinonaktifkan, tombol sinkron caption memakai perkiraan waktu.
 - Model: `ggml-small.bin` (sekitar 488 MB) dari Hugging Face (`ggerganov/whisper.cpp`), diunduh di Pengaturan ke
-  `<folder data>\models\whisper`, bisa dijeda dan dilanjutkan (HTTP Range), lalu dicek SHA-256. Untuk pengembangan, `STUDIO_WHISPER_URL` bisa menunjuk salinan lokal.
+  `<folder data>/models/whisper`, bisa dijeda dan dilanjutkan (HTTP Range), lalu dicek SHA-256. Untuk pengembangan, `STUDIO_WHISPER_URL` bisa menunjuk salinan lokal.
 - Dijalankan di antrean `whisper` (satu per satu). Detail argumennya di [alur-produksi.md](alur-produksi.md#5-caption-akurat-whisper-lokal).
 
 ## YouTube (halaman About)

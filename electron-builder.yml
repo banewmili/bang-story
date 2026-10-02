@@ -11,11 +11,16 @@ files:
 extraResources:
   - from: resources/fonts
     to: fonts
-  - from: node_modules/ffmpeg-static/ffmpeg.exe.LICENSE
+  # Copied by scripts/copy-ffmpeg-license.mjs before packaging: the ffmpeg-static
+  # LICENSE file is named ffmpeg.exe.LICENSE on Windows and ffmpeg.LICENSE elsewhere.
+  - from: build/FFmpeg-LICENSE.txt
     to: licenses/FFmpeg-LICENSE.txt
   - from: resources/licenses
     to: licenses
-  - from: resources/whisper
+  # Staged by scripts/prepare-dist.mjs: only the whisper.cpp binaries for the
+  # platform being packaged (Windows: whisper-cli.exe + DLLs; macOS: whisper-cli
+  # if one was placed in resources/whisper, otherwise empty and the app uses PATH).
+  - from: build/stage/whisper
     to: whisper
 asarUnpack:
   - node_modules/ffmpeg-static/**
@@ -30,4 +35,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   shortcutName: Bang Story
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  artifactName: BangStory-${version}-mac-${arch}.${ext}
+  category: public.app-category.video
+  darkModeSupport: true
 npmRebuild: true

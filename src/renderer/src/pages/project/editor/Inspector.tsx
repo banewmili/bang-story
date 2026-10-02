@@ -13,7 +13,7 @@ import {
 import { CAMERA_PRESETS, MOTION_STRENGTHS } from '@shared/motion'
 import { geminiVoiceName } from '@shared/models'
 import { voiceSpan } from '@shared/timeline'
-import type { Asset, Clip, WordTiming } from '@shared/types'
+import type { Asset, Clip, WhisperStatus, WordTiming } from '@shared/types'
 import { Select } from '../../../components/Select'
 import { AutoTextarea } from '../../../components/AutoTextarea'
 import { Button, Segmented, Switch, cx, inputCls } from '../../../components/ui'
@@ -402,8 +402,10 @@ function CaptionTiming() {
   const { toast, go } = useApp()
   const [whisper, setWhisper] = useState<boolean | null>(null)
   useEffect(() => {
-    void window.api.whisper.status().then((s) => setWhisper(s.state === 'ready'))
-    return window.api.on.whisper((s) => setWhisper(s.state === 'ready'))
+    // "Ready" also needs the whisper.cpp binary; without it the model alone is useless.
+    const usable = (s: WhisperStatus): boolean => s.state === 'ready' && !s.binaryMissing
+    void window.api.whisper.status().then((s) => setWhisper(usable(s)))
+    return window.api.on.whisper((s) => setWhisper(usable(s)))
   }, [])
   if (!project) return null
   const voiced = clips.filter((c) => c.audioAssetId && assets[c.audioAssetId])

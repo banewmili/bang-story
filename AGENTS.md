@@ -14,6 +14,7 @@ npm run dev            # jalankan aplikasi dalam mode pengembangan (hot reload r
 npm run typecheck      # wajib bersih sebelum selesai: tsconfig.node.json + tsconfig.web.json
 npm run build          # build ke folder out/ (main, preload, renderer)
 npm run dist           # build + installer Windows (NSIS) ke folder dist/
+npm run dist:mac       # build + .dmg macOS (x64 + arm64); hanya bisa dijalankan di Mac
 ```
 
 Tidak ada framework unit test. Verifikasi dilakukan dengan `npm run typecheck`, `npm run build`, dan **dev harness**
@@ -45,7 +46,8 @@ src/
   renderer/src/    tampilan React + Tailwind v4 + Zustand
     pages/project/  langkah Ide, Naskah, Storyboard, Editor
     pages/project/editor/  pratinjau (Player), Timeline, Inspector (panel kanan), engine pemutaran
-resources/         font caption, whisper-cli.exe + DLL, file lisensi
+resources/         font caption, biner whisper.cpp per platform (Windows: whisper-cli.exe + DLL;
+               macOS: whisper-cli dari PATH via `brew install whisper.cpp`), file lisensi
 build/             ikon aplikasi untuk installer (icon.ico, icon.png), dibuat dari logo di components/Logo.tsx
 docs/              dokumentasi pengembang
 ```

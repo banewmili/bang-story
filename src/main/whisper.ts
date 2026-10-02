@@ -1,6 +1,6 @@
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs'
+import { accessSync, constants, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs'
 import { cpus } from 'node:os'
 import { join } from 'node:path'
 import { once } from 'node:events'
@@ -31,26 +31,74 @@ export function modelDir(): string {
 
 const modelPath = (): string => join(modelDir(), MODEL.file)
 
-function cliPath(): string {
-  return app.isPackaged ? join(process.resourcesPath, 'whisper', 'whisper-cli.exe') : join(app.getAppPath(), 'resources', 'whisper', 'whisper-cli.exe')
+function cliPath(): string | null {
+  if (process.platform === 'win32') {
+    const bundled = app.isPackaged
+      ? join(process.resourcesPath, 'whisper', 'whisper-cli.exe')
+      : join(app.getAppPath(), 'resources', 'whisper', 'whisper-cli.exe')
+    return existsSync(bundled) ? bundled : null
+  }
+  // macOS/Linux: prefer a bundled whisper-cli, otherwise fall back to PATH
+  // (Homebrew installs whisper.cpp as `whisper-cli`).
+  const bundled = app.isPackaged
+    ? join(process.resourcesPath, 'whisper', 'whisper-cli')
+    : join(app.getAppPath(), 'resources', 'whisper', 'whisper-cli')
+  if (isRunnable(bundled)) return bundled
+  return cliFromPath()
+}
+
+/** Looks up a program on PATH (`which` on Unix, `where` on Windows). Result is memoized. */
+let pathCli: string | null | undefined
+function cliFromPath(): string | null {
+  if (pathCli === undefined) {
+    try {
+      const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', ['whisper-cli'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore']
+      })
+      pathCli = out.split('\n').map((l) => l.trim()).find(Boolean) ?? null
+    } catch {
+      pathCli = null
+    }
+  }
+  return pathCli
+}
+
+function isRunnable(file: string): boolean {
+  try {
+    accessSync(file, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 let download: { ctrl: AbortController; received: number; phase: 'downloading' | 'verifying' } | null = null
 let lastError: string | null = null
 
 export function whisperStatus(): WhisperStatus {
-  if (download) return { state: download.phase, received: download.received, total: MODEL.bytes, error: null }
+  if (download)
+    return {
+      state: download.phase,
+      received: download.received,
+      total: MODEL.bytes,
+      error: null,
+      binaryMissing: cliPath() == null,
+      platform: process.platform
+    }
   const ready = existsSync(modelPath()) && statSync(modelPath()).size === MODEL.bytes
   const part = `${modelPath()}.part`
   return {
     state: ready ? 'ready' : 'missing',
     received: ready ? MODEL.bytes : existsSync(part) ? statSync(part).size : 0,
     total: MODEL.bytes,
-    error: ready ? null : lastError
+    error: ready ? null : lastError,
+    binaryMissing: cliPath() == null,
+    platform: process.platform
   }
 }
 
-export const whisperReady = (): boolean => whisperStatus().state === 'ready' && existsSync(cliPath())
+export const whisperReady = (): boolean => whisperStatus().state === 'ready' && cliPath() != null
 
 function sha256(file: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -155,6 +203,8 @@ type JsonSegment = { text: string; offsets: { from: number; to: number }; tokens
  */
 export async function recognize(audio: string, language: string, tmp: string, signal?: AbortSignal): Promise<Heard[]> {
   if (!whisperReady()) throw new Error('Model Whisper belum diunduh. Unduh dulu di Pengaturan.')
+  const cli = cliPath()
+  if (!cli) throw new Error('Program whisper.cpp belum terpasang di komputer ini.')
   mkdirSync(tmp, { recursive: true })
   const wav = join(tmp, `whisper-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`)
   await run(binPath(ffmpegStatic!), ['-hide_banner', '-y', '-i', audio, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wav], signal)
@@ -162,7 +212,7 @@ export async function recognize(audio: string, language: string, tmp: string, si
   const threads = String(Math.max(2, Math.min(8, Math.floor(cpus().length / 2))))
   // One word per segment (-ml 1 -sow), full JSON with DTW token times (DTW needs flash attention off).
   await run(
-    cliPath(),
+    cli,
     ['-m', modelPath(), '-f', wav, '-l', whisperLanguage(language), '-ml', '1', '-sow', '-ojf', '-of', outBase, '-np', '-t', threads, '-nfa', '-dtw', 'small'],
     signal
   )

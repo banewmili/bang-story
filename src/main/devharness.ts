@@ -29,9 +29,16 @@ async function addDemoSpeech(projectId: string): Promise<void> {
     const rel = `audio/speech-${i}.wav`
     const abs = assetAbsPath(projectId, rel)
     mkdirSync(dirname(abs), { recursive: true })
-    const ps = `Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile('${abs.replace(/'/g, "''")}'); $s.Speak('${text}'); $s.Dispose()`
-    // stdin must be closed, or PowerShell waits on it and blocks the main process.
-    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
+    if (process.platform === 'win32') {
+      const ps = `Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.SetOutputToWaveFile('${abs.replace(/'/g, "''")}'); $s.Speak('${text}'); $s.Dispose()`
+      // stdin must be closed, or PowerShell waits on it and blocks the main process.
+      execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
+    } else if (process.platform === 'darwin') {
+      // macOS built-in text-to-speech; --data-format writes a real WAV file.
+      execFileSync('say', ['-o', abs, '--data-format=LEI16@22050', text], { stdio: ['ignore', 'ignore', 'pipe'] })
+    } else {
+      throw new Error('Dev harness demo seeding needs Windows (PowerShell) or macOS (say).')
+    }
     const ms = await probeDurationMs(abs)
     const asset = insertAsset({
       projectId,

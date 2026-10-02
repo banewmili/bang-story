@@ -8,6 +8,18 @@ Cara menaikkan versi ada di [docs/pengembangan.md](docs/pengembangan.md#versi-da
 
 ## [Belum dirilis]
 
+### Dukungan macOS
+- Aplikasi berjalan penuh di macOS lewat `START - MAC.command` / `npm run dev` (sebelumnya caption akurat tidak
+  tersedia di Mac).
+- Caption akurat (Whisper) di Mac memakai `whisper-cli` dari PATH: cukup `brew install whisper.cpp`, tanpa biner
+  bundel. Kalau programnya belum terpasang, Pengaturan menampilkan panduan dan tombol sinkron caption kembali ke
+  perkiraan waktu.
+- `npm run dist:mac` menghasilkan `.dmg` untuk Intel (x64) dan Apple Silicon (arm64). Skrip `prepare-dist`
+  menyalin lisensi FFmpeg sesuai platform dan memastikan folder `resources/whisper` ada sebelum packaging.
+- `START - MAC.command` memeriksa Node.js 22+, memberi petunjuk `xcode-select --install` kalau modul native gagal
+  disusun, dan mengingatkan pemasangan whisper.cpp.
+- Dev harness: data demo memakai `say` bawaan macOS sebagai pengganti PowerShell di Windows.
+
 ## [1.0.0] - 2026-10-02
 
 Rilis pertama Bang Story (sebelumnya bernama Studio Cerita).

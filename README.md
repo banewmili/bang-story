@@ -103,7 +103,7 @@ Cara membuat video dari ide sampai ekspor: [tonton di YouTube](https://youtu.be/
 
 ### Kebutuhan
 
-- **Windows 10/11 64-bit.** Aplikasi juga bisa dijalankan dari kode sumber di macOS, tapi belum diuji penuh. Caption akurat (Whisper) dan installer baru tersedia untuk Windows.
+- **Windows 10/11 64-bit** untuk installer siap pakai. **macOS** didukung penuh: jalankan dari kode sumber dengan klik 2x `START - MAC.command` (butuh Node.js 22+, Xcode Command Line Tools untuk modul native, dan `brew install whisper.cpp` untuk caption akurat). Installer `.dmg` bisa dibuat di Mac dengan `npm run dist:mac`.
 - **Kunci API** (lihat [Kunci API](#kunci-api)) untuk:
   - Higgsfield;
   - satu penyusun cerita;

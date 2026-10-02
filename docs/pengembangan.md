@@ -3,8 +3,9 @@
 ## Persiapan
 
 - **Node.js LTS** (dikembangkan dengan Node 22) dan npm.
-- Windows 10/11 x64 untuk build installer dan fitur Whisper. Aplikasi bisa jalan di macOS lewat `npm run dev`,
-  tapi caption akurat (Whisper) belum tersedia di sana.
+- Windows 10/11 x64 untuk build installer Windows. macOS didukung penuh lewat `START - MAC.command` /
+  `npm run dev`; caption akurat (Whisper) butuh `brew install whisper.cpp`, dan installer `.dmg` dibuat dengan
+  `npm run dist:mac` di Mac (lihat [Rilis](#rilis)).
 - Koneksi internet saat `npm install` (Electron mengunduh programnya sendiri; `ffmpeg-static` mengunduh FFmpeg
   sesuai OS).
 
@@ -153,9 +154,29 @@ Yang ikut dipaketkan (lihat `electron-builder.yml`): `out/`, FFmpeg (di luar asa
 `buildResources`). Kalau logo berubah, buat ulang `icon.ico` (16–256 px) dan `icon.png` (1024 px) dari logo yang baru.
 
 Installer hanya untuk Windows dan belum ditandatangani (*code signing*), jadi Windows SmartScreen menampilkan
-peringatan saat pertama kali dijalankan. Installer macOS (`.dmg`) hanya bisa dibuat di Mac, dan butuh akun Apple
-Developer supaya tidak diblokir Gatekeeper. Selain itu, Whisper versi macOS juga belum ada. Lihat
-[masalah-diketahui.md](masalah-diketahui.md).
+peringatan saat pertama kali dijalankan.
+
+### Rilis macOS
+
+Jalankan di Mac (atau di GitHub Actions `macos-latest`):
+
+1. `npm run dist:mac` → `dist/BangStory-<versi>-mac-<x64|arm64>.dmg`.
+2. `.dmg` tidak ditandatangani tanpa akun Apple Developer, jadi saat pertama dibuka macOS menampilkannya sebagai
+   aplikasi dari pengembang tak dikenal: klik kanan `.app` › **Open** › **Open** sekali saja, setelah itu terbuka
+   normal. Untuk distribusi tanpa peringatan, tandatangani dan notarisasi dengan akun Apple Developer
+   (`CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, dll di dokumentasi electron-builder).
+3. Ikon macOS (`.icns`) belum disertakan; electron-builder memakai ikon bawaan Electron. Untuk memakai logo
+   aplikasi, buat `build/icon.icns` di Mac dari `build/icon.png` (1024 px):
+   ```bash
+   mkdir -p icon.iconset
+   for s in 16 32 128 256 512; do
+     sips -z $s $s build/icon.png --out icon.iconset/icon_${s}x${s}.png
+     sips -z $((s*2)) $((s*2)) build/icon.png --out icon.iconset/icon_${s}x${s}@2x.png
+   done
+   iconutil -c icns icon.iconset -o build/icon.icns
+   ```
+4. Caption akurat di Mac butuh `brew install whisper.cpp` di komputer pengguna (aplikasi mendeteksinya otomatis
+   lewat PATH; lihat [layanan-ai.md](layanan-ai.md#whisper-lokal-srcmainwhisperts)).
 
 ### Screenshot README
 

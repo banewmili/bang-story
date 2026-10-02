@@ -306,6 +306,9 @@ export interface WhisperStatus {
   received: number
   total: number
   error: string | null
+  /** True when no whisper.cpp binary is available on this machine (e.g. macOS without `brew install whisper.cpp`). */
+  binaryMissing: boolean
+  platform: string
 }
 
 export interface ModelOption {

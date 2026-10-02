@@ -47,7 +47,9 @@ export function WhisperSection({ settings, onSettings }: { settings: AppSettings
             <span className="text-base font-bold">Whisper Small</span>
             <span className="text-[13px] text-ink-2">Pengenal suara multibahasa (termasuk Indonesia) lewat whisper.cpp · {mb(status.total)}</span>
           </div>
-          {status.state === 'ready' ? (
+          {status.binaryMissing ? (
+            <Badge tone="warn">Butuh whisper.cpp</Badge>
+          ) : status.state === 'ready' ? (
             <Badge tone="ok">Siap dipakai</Badge>
           ) : busy ? (
             <Badge tone="warn">{status.state === 'verifying' ? 'Memeriksa file' : 'Mengunduh'}</Badge>
@@ -60,6 +62,20 @@ export function WhisperSection({ settings, onSettings }: { settings: AppSettings
           Dipakai untuk suara Gemini TTS, yang tidak mengirim waktu per kata. Suara ElevenLabs sudah membawa waktu kata yang presisi. Setelah diunduh,
           Whisper berjalan tanpa internet dan tanpa biaya.
         </p>
+
+        {status.binaryMissing && (
+          <p className="rounded-lg bg-sun-soft px-3 py-2 text-[13px] leading-relaxed text-sun-ink">
+            Program whisper.cpp belum terpasang di komputer ini, jadi caption akurat belum bisa dipakai.{' '}
+            {status.platform === 'darwin' ? (
+              <>
+                Pasang lewat Terminal dengan <code className="rounded bg-black/10 px-1 font-mono">brew install whisper.cpp</code>, lalu tutup dan buka
+                lagi Bang Story.
+              </>
+            ) : (
+              <>Tanpa program ini, caption memakai perkiraan waktu.</>
+            )}
+          </p>
+        )}
 
         {busy && (
           <div className="flex flex-col gap-1.5">
@@ -87,7 +103,12 @@ export function WhisperSection({ settings, onSettings }: { settings: AppSettings
               Batal
             </Button>
           ) : (
-            <Button variant="accent" icon={<Download className="size-4" />} onClick={() => void window.api.whisper.download()}>
+            <Button
+              variant="accent"
+              icon={<Download className="size-4" />}
+              disabled={status.binaryMissing}
+              onClick={() => void window.api.whisper.download()}
+            >
               {status.received > 0 ? `Lanjutkan unduhan (${mb(status.total - status.received)} lagi)` : `Unduh model (${mb(status.total)})`}
             </Button>
           )}
