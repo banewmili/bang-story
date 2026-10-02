@@ -299,7 +299,14 @@ export function ModelPicker({
                   <span className="flex shrink-0 flex-col items-end gap-0.5 text-[11.5px] text-ink-2">
                     {ctxLabel(m.contextLength) && <span className="font-mono">{ctxLabel(m.contextLength)} konteks</span>}
                     {price && <span className={cx('font-mono', price === 'Gratis' && 'font-semibold text-ok-ink')}>{price}</span>}
-                    {m.creditUnit !== undefined &&
+                    {m.usdOnly ? (
+                      m.usd == null ? (
+                        <Spinner className="mt-1 size-3.5 text-muted" />
+                      ) : (
+                        <span className="font-mono text-[12.5px] font-semibold text-ink">{usdLabel(m.usd)}</span>
+                      )
+                    ) : (
+                      m.creditUnit !== undefined &&
                       (m.credits === undefined ? (
                         <Spinner className="mt-1 size-3.5 text-muted" />
                       ) : m.credits === null ? (
@@ -311,7 +318,8 @@ export function ModelPicker({
                           <span className="font-mono text-[12.5px] font-semibold text-ink">{creditLabel(m.credits)} kr</span>
                           <span className="font-mono text-muted">{[m.creditUnit, m.usd != null && usdLabel(m.usd)].filter(Boolean).join(' · ')}</span>
                         </>
-                      ))}
+                      ))
+                    )}
                   </span>
                 </button>
               )

@@ -95,6 +95,26 @@ di API Higgsfield (hanya di aplikasi webnya). Satu entri:
   `<folder data>/models/whisper`, bisa dijeda dan dilanjutkan (HTTP Range), lalu dicek SHA-256. Untuk pengembangan, `STUDIO_WHISPER_URL` bisa menunjuk salinan lokal.
 - Dijalankan di antrean `whisper` (satu per satu). Detail argumennya di [alur-produksi.md](alur-produksi.md#5-caption-akurat-whisper-lokal).
 
+## Visual Google: Nano Banana + Omni Flash (`src/main/services/google-visual.ts`)
+
+Alternatif Higgsfield untuk menggambar dan menganimasikan klip, memakai **kunci Gemini yang sama** dengan
+penyusun cerita dan narator (diatur di Pengaturan; tidak ada kunci terpisah).
+
+- Gambar: **Nano Banana** (`gemini-2.5-flash-image`) lewat `models.generateContent` dengan
+  `responseModalities: ['IMAGE']` dan `imageConfig.aspectRatio` mengikuti format proyek. Lembar karakter
+  (maks 3 file lokal) dikirim inline sebagai referensi, jadi tidak perlu diunggah dulu.
+- Video: **Omni Flash** (`gemini-omni-1.1-flash`) lewat **Interactions API** (`ai.interactions.create` dengan
+  `video_config: { task: 'image_to_video' }`). Hasilnya klip 3-10 detik; kalau responsnya masih antre, aplikasi
+  mem-poll `interactions.get` sampai selesai (maks 10 menit). Video diambil dari bytes inline atau diunduh dari
+  file URI. Klip dibuat bisu (aturan yang sama dengan Higgsfield) karena narasi dan musik datang dari editor.
+- Antrean job `google` (maks 2 bersamaan). Job Google yang belum selesai saat aplikasi ditutup tidak dilanjutkan
+  (ditandai gagal, tinggal dijalankan ulang).
+- Biaya dalam USD, dihitung lokal dari tarif publik (≈ $0,04/gambar, ≈ $0,10/detik video 720p), jadi picker tidak
+  perlu memanggil API estimasi. Video butuh **paid tier** di proyek Google AI Studio; tanpa itu API menolak
+  dengan pesan yang jelas di aplikasi.
+- Pilihan penyedia (`visualProvider`) tersimpan per proyek (kolom `visual_provider`, migrasi terakhir) dan sebagai
+  bawaan proyek baru di Pengaturan. Katalog model ada di `src/shared/google.ts`.
+
 ## YouTube (halaman About)
 
 Video tutorial diputar lewat iframe `https://www.youtube.com/embed/<id>`. Sejak 2025 YouTube mewajibkan pemutar

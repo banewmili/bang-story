@@ -2,6 +2,8 @@ export type ProjectStatus = 'draft' | 'script' | 'storyboard' | 'editing' | 'exp
 export type AspectRatio = '16:9' | '9:16'
 export type TtsProvider = 'gemini' | 'elevenlabs'
 export type LlmProvider = 'gemini' | 'openrouter' | 'groq' | 'custom'
+/** Who draws clip images and animates them: Higgsfield, or Google (Nano Banana + Omni Flash) on the Gemini key. */
+export type VisualProvider = 'higgsfield' | 'google'
 export type ApiProvider = 'higgsfield' | 'gemini' | 'elevenlabs' | 'openrouter' | 'groq' | 'custom'
 /** Where a live model list comes from: an LLM provider, or a TTS catalog. */
 export type ModelSource = LlmProvider | 'gemini-tts' | 'elevenlabs'
@@ -102,6 +104,8 @@ export interface Project {
   styleId: string
   ttsProvider: TtsProvider
   ttsVoice: string
+  /** Who draws and animates this project's clips. */
+  visualProvider: VisualProvider
   /** Higgsfield endpoint ids; null falls back to the app default. */
   imageModel: string | null
   videoModel: string | null
@@ -287,6 +291,8 @@ export interface AppSettings {
   customBaseUrl: string
   geminiTtsModel: string
   elevenModel: string
+  /** Who draws and animates clips in new projects. */
+  visualProvider: VisualProvider
   /** Higgsfield models for new projects: the last ones picked in the Idea step. */
   imageModel: string
   videoModel: string
@@ -328,6 +334,8 @@ export interface ModelOption {
   usd?: number | null
   /** What the credits pay for, e.g. "10 dtk". */
   creditUnit?: string
+  /** Row shows only the USD price (Google models), never credits. */
+  usdOnly?: boolean
 }
 
 export interface ModelList {

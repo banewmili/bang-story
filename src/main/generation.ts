@@ -3,6 +3,14 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { estimateWordTimings } from '@shared/captions'
 import { stripVoiceTags } from '@shared/speech'
+import {
+  GOOGLE_MAX_REFS,
+  getGoogleImageModel,
+  getGoogleVideoModel,
+  googleEstimateUsd,
+  isGoogleVisualModel,
+  type GoogleVisualModel
+} from '@shared/google'
 import { getImageModel, getVideoModel, imageBody, maxRefs, promptLimit, videoBody, type HfModel } from '@shared/higgsfield'
 import { getStyle } from '@shared/styles'
 import type { AspectRatio, Asset, Character, Clip, CreditEstimate, Job, Project, WordTiming } from '@shared/types'
@@ -32,6 +40,7 @@ import { dropCache, getSettings, readCache, writeCache } from './settings'
 import { probeDurationMs, probeSize } from './services/audio'
 import * as eleven from './services/elevenlabs'
 import * as gemini from './services/gemini'
+import * as gvis from './services/google-visual'
 import * as hf from './services/higgsfield'
 import { downloadTo, sleep } from './services/http'
 
@@ -218,6 +227,113 @@ async function finishHiggsfield(ctx: TaskCtx, job: Job, requestId: string, paylo
   return asset.id
 }
 
+// ---------- Google visual models (Nano Banana + Omni Flash, on the Gemini key) ----------
+
+/** Character sheets as local files: Nano Banana takes them inline, no upload needed. */
+async function googleRefPaths(projectId: string, chars: Character[], signal: AbortSignal): Promise<{ paths: string[]; names: string[] }> {
+  await waitForSheets(
+    chars.map((c) => c.id),
+    signal
+  )
+  const paths: string[] = []
+  const names: string[] = []
+  for (const c of chars) {
+    const fresh = getCharacter(c.id)
+    const sheet = getAsset(fresh.sheetAssetId)
+    if (!sheet || paths.length >= GOOGLE_MAX_REFS) continue
+    paths.push(assetAbsPath(projectId, sheet.localPath))
+    names.push(fresh.name)
+  }
+  return { paths, names }
+}
+
+interface GooglePayload {
+  target: 'clip-image' | 'sheet' | 'clip-video'
+  model: string
+  prompt: string
+}
+
+/** Stores a finished Google image/video exactly like a Higgsfield one, so the editor cannot tell them apart. */
+async function finishGoogleVisual(
+  ctx: TaskCtx,
+  job: Job,
+  payload: GooglePayload,
+  bytes: Buffer,
+  ext: '.png' | '.mp4'
+): Promise<string> {
+  const isVideo = payload.target === 'clip-video'
+  ctx.progress(0.9, 'Menyimpan hasil')
+  const rel = saveFile(job.projectId, isVideo ? 'videos' : 'images', ext, bytes)
+  const abs = assetAbsPath(job.projectId, rel)
+  const size = await probeSize(abs)
+  const durationMs = isVideo ? await probeDurationMs(abs).catch(() => null) : null
+  const asset = insertAsset({
+    projectId: job.projectId,
+    clipId: job.clipId,
+    characterId: job.characterId,
+    kind: isVideo ? 'video' : 'image',
+    provider: 'google',
+    model: payload.model,
+    prompt: payload.prompt,
+    localPath: rel,
+    durationMs,
+    width: size?.width ?? null,
+    height: size?.height ?? null
+  })
+  emit.asset(asset)
+  if (payload.target === 'sheet' && job.characterId) {
+    setCharacterSheet(job.characterId, asset.id)
+    emit.character({ characterId: job.characterId, patch: { sheetAssetId: asset.id } })
+  } else if (payload.target === 'clip-image' && job.clipId) {
+    patchClip(job.clipId, { imageAssetId: asset.id })
+    emit.clip({ clipId: job.clipId, patch: { imageAssetId: asset.id } })
+    const project = getProject(job.projectId)
+    const first = clipsOf(job.projectId)[0]
+    if (!project.coverAssetId || first?.id === job.clipId) touchProject(job.projectId, { coverAssetId: asset.id })
+  } else if (payload.target === 'clip-video' && job.clipId) {
+    const patch = { videoAssetId: asset.id, motionType: 'video' as const, mediaInMs: 0 }
+    patchClip(job.clipId, patch)
+    emit.clip({ clipId: job.clipId, patch })
+  }
+  touchProject(job.projectId)
+  return asset.id
+}
+
+function startGoogle(job: Job, target: GooglePayload['target']): Job {
+  emit.job(job)
+  return runJob(job, 'google', async (ctx) => {
+    ctx.progress(0.04, 'Menyiapkan prompt')
+    const clip = job.clipId ? getClip(job.clipId) : null
+    const project = getProject(job.projectId)
+    const model: GoogleVisualModel = target === 'clip-video' ? getGoogleVideoModel(project.videoModel) : getGoogleImageModel(project.imageModel)
+    let prompt: string
+    let bytes: Buffer
+    let ext: '.png' | '.mp4'
+    if (target === 'clip-video') {
+      if (!clip?.imageAssetId) throw new Error('Buat gambar klip ini dulu sebelum membuat video AI.')
+      const image = getAsset(clip.imageAssetId)
+      if (!image) throw new Error('Gambar klip tidak ditemukan')
+      const fresh = getClip(job.clipId!)
+      prompt =
+        fresh.videoPrompt.trim() ||
+        `${splitAvoid(fresh.visualPrompt).scene.replace(/\.$/, '')}. Subtle natural motion of the characters and environment, the camera slowly pushes in. Keep the art style of the first frame.`
+      ctx.progress(0.08, 'Mengirim ke Omni Flash')
+      bytes = await gvis.generateVideo(prompt, assetAbsPath(job.projectId, image.localPath), (m) => ctx.progress(0.3, m), ctx.signal)
+      ext = '.mp4'
+    } else {
+      const chars = charactersOf(project.id).filter((c) => (target === 'sheet' ? c.id === job.characterId : (clip?.characterIds ?? []).includes(c.id)))
+      const refs = await googleRefPaths(project.id, chars, ctx.signal)
+      prompt = target === 'sheet' ? sheetPrompt(project, getCharacter(job.characterId!)) : clipPrompt(project, clip!, chars, refs.names, 4000)
+      ctx.progress(0.08, 'Menggambar dengan Nano Banana')
+      bytes = await gvis.generateImage(prompt, project.aspectRatio, refs.paths, ctx.signal)
+      ext = '.png'
+    }
+    const payload: GooglePayload = { target, model: model.id, prompt }
+    updateJobPayload(job.id, payload)
+    return finishGoogleVisual(ctx, job, payload, bytes, ext)
+  })
+}
+
 function startHiggsfield(job: Job, build: (ctx: TaskCtx) => Promise<{ endpoint: string; body: Record<string, unknown>; payload: HfPayload }>): Job {
   emit.job(job)
   return runJob(job, 'higgsfield', async (ctx) => {
@@ -241,6 +357,11 @@ export function generateClipImage(clipId: string): Job {
   const existing = activeJobFor({ clipId }, 'image')
   if (existing) return existing
   const clip = getClip(clipId)
+  const provider = getProject(clip.projectId).visualProvider
+  if (provider === 'google') {
+    const job = insertJob({ projectId: clip.projectId, clipId, kind: 'image', provider: 'google' })
+    return startGoogle(job, 'clip-image')
+  }
   const job = insertJob({ projectId: clip.projectId, clipId, kind: 'image', provider: 'higgsfield' })
   return startHiggsfield(job, async (ctx) => {
     const fresh = getClip(clipId)
@@ -261,6 +382,11 @@ export function generateCharacterSheet(characterId: string): Job {
   const existing = activeJobFor({ characterId }, 'sheet')
   if (existing) return existing
   const c = getCharacter(characterId)
+  const provider = getProject(c.projectId).visualProvider
+  if (provider === 'google') {
+    const job = insertJob({ projectId: c.projectId, characterId, kind: 'sheet', provider: 'google' })
+    return startGoogle(job, 'sheet')
+  }
   const job = insertJob({ projectId: c.projectId, characterId, kind: 'sheet', provider: 'higgsfield' })
   return startHiggsfield(job, async () => {
     const project = getProject(c.projectId)
@@ -279,6 +405,11 @@ export function generateClipVideo(clipId: string): Job {
   if (existing) return existing
   const clip = getClip(clipId)
   if (!clip.imageAssetId) throw new Error('Buat gambar klip ini dulu sebelum membuat video AI.')
+  const provider = getProject(clip.projectId).visualProvider
+  if (provider === 'google') {
+    const job = insertJob({ projectId: clip.projectId, clipId, kind: 'video', provider: 'google' })
+    return startGoogle(job, 'clip-video')
+  }
   const job = insertJob({ projectId: clip.projectId, clipId, kind: 'video', provider: 'higgsfield' })
   return startHiggsfield(job, async (ctx) => {
     const fresh = getClip(clipId)
@@ -357,8 +488,8 @@ export function generateClipTts(clipId: string): Job {
 export function generateMissingImages(projectId: string): Job[] {
   const jobs: Job[] = []
   const project = getProject(projectId)
-  const model = getImageModel(project.imageModel)
-  if (maxRefs(model) > 0) {
+  const useSheets = project.visualProvider === 'google' ? GOOGLE_MAX_REFS > 0 : maxRefs(getImageModel(project.imageModel)) > 0
+  if (useSheets) {
     const needed = new Set(clipsOf(projectId).flatMap((c) => c.characterIds))
     for (const c of charactersOf(projectId)) {
       if (needed.has(c.id) && !c.sheetAssetId) jobs.push(generateCharacterSheet(c.id))
@@ -415,8 +546,8 @@ export async function setActiveAsset(clipId: string, assetId: string): Promise<v
 const failedEstimates = new Map<string, number>()
 
 /**
- * Credits for one image, or one clip video of about `seconds`. The model pickers ask for every model,
- * so answers are kept for a day and failures for ten minutes.
+ * Credits for one image, or one clip video of about `seconds`. Google models are billed in USD,
+ * so their estimate is computed locally instead of asking an API.
  */
 export async function estimateCredits(
   kind: 'image' | 'video',
@@ -425,6 +556,9 @@ export async function estimateCredits(
   seconds = 5,
   resolution?: string | null
 ): Promise<CreditEstimate | null> {
+  if (isGoogleVisualModel(modelId)) {
+    return { credits: 0, usd: googleEstimateUsd(kind, modelId, seconds) }
+  }
   const model = kind === 'image' ? getImageModel(modelId) : getVideoModel(modelId)
   const body =
     kind === 'image'

@@ -8,6 +8,16 @@ Cara menaikkan versi ada di [docs/pengembangan.md](docs/pengembangan.md#versi-da
 
 ## [Belum dirilis]
 
+### Penyedia visual Google (Nano Banana + Omni Flash)
+- Langkah Ide cerita kini punya pilihan penyedia visual: **Higgsfield** atau **Google**. Pilihan tersimpan per proyek
+  dan menjadi bawaan untuk proyek baru.
+- **Nano Banana** (`gemini-2.5-flash-image`) menggambar gambar klip dan lembar karakter, memakai lembar karakter
+  (maks 3) sebagai referensi agar tokoh konsisten.
+- **Omni Flash** (`gemini-omni-1.1-flash`) menganimasikan gambar klip jadi video 3-10 detik lewat Interactions API.
+- Keduanya memakai **kunci Gemini yang sama** dengan penyusun cerita dan narator (tidak perlu kunci baru);
+  Pengaturan menjelaskan pemakaian bersama ini. Video Omni Flash butuh paid tier di Google AI Studio.
+- Biaya ditampilkan dalam USD (≈ $0,04/gambar, ≈ $0,10/detik video 720p), bukan kredit Higgsfield.
+
 ### Dukungan macOS
 - Aplikasi berjalan penuh di macOS lewat `START - MAC.command` / `npm run dev` (sebelumnya caption akurat tidak
   tersedia di Mac).

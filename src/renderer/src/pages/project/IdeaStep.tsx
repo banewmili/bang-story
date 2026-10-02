@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bot, Play, Sparkles, Square } from 'lucide-react'
+import { getGoogleImageModel } from '@shared/google'
 import { getImageModel } from '@shared/higgsfield'
 import { DURATIONS, LANGUAGES, clipCountFor, llmName } from '@shared/models'
 import { getStyle } from '@shared/styles'
@@ -132,7 +133,8 @@ export function IdeaStep() {
 
   const clipCount = clipCountFor(project.durationSec)
   const perClip = Math.round(project.durationSec / clipCount)
-  const model = getImageModel(project.imageModel)
+  const modelName =
+    project.visualProvider === 'google' ? getGoogleImageModel(project.imageModel).name : getImageModel(project.imageModel).name
 
   const compose = async (): Promise<void> => {
     if (!project.synopsis.trim()) {
@@ -304,7 +306,7 @@ export function IdeaStep() {
       <footer className="absolute inset-x-0 bottom-0 flex h-[84px] items-center gap-4 border-t border-line bg-surface px-14">
         <div className="flex flex-col gap-0.5">
           <span className="text-[15px] font-semibold">
-            ± {clipCount} adegan · gambar {model.name}
+            ± {clipCount} adegan · gambar {modelName}
           </span>
           <span className="flex items-center gap-1.5 text-[13px] text-muted">
             <Bot className="size-3.5" />
